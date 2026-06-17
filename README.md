@@ -229,10 +229,39 @@ field in `package.json`:
       "width": 900,
       "height": 640,
       "title": "Hello World",
-      "backgroundColor": "#1e1e1e"
+      "backgroundColor": "#1e1e1e",
+      "menuBar": false,
+      "resizable": true
     }
   }
 }
+```
+
+#### Window options (`qbf.window`)
+
+All of these are plain JSON — no Electron code required. Anything you don't
+set falls back to a sensible default.
+
+| Option            | Default     | Description                                          |
+| ----------------- | ----------- | ----------------------------------------------------- |
+| `width` / `height`| `1024`/`768`| Initial window size                                  |
+| `minWidth` / `minHeight` | —     | Minimum size the window can be resized to             |
+| `maxWidth` / `maxHeight` | —     | Maximum size the window can be resized to             |
+| `title`           | app name    | Window title                                          |
+| `backgroundColor` | `#ffffff`   | Background shown before the UI paints                 |
+| `menuBar`         | `false`     | Show the native File/Edit/View/Window/Help menu bar    |
+| `frame`           | `true`      | Show the OS window frame (title bar + border). `false` gives a borderless window |
+| `resizable`       | `true`      | Whether the user can resize the window                |
+| `maximizable`     | `true`      | Whether the maximize button/gesture works              |
+| `minimizable`     | `true`      | Whether the minimize button/gesture works              |
+| `fullscreenable`  | `true`      | Whether the window can go fullscreen                  |
+| `fullscreen`      | `false`     | Start the window in fullscreen                         |
+| `alwaysOnTop`     | `false`     | Keep the window above all others                       |
+
+A common "simple utility app" setup — no menu bar, fixed size:
+
+```jsonc
+"window": { "width": 480, "height": 320, "menuBar": false, "resizable": false }
 ```
 
 Packaging is handled by [electron-builder](https://www.electron.build/). The
@@ -240,6 +269,24 @@ build currently targets **Windows** (NSIS installer) and ships **without an
 icon** by default. To customise targets, signing, icons, etc., add a standard
 `build` field to your `package.json` — quick-brown-fox merges it into its
 defaults.
+
+## Troubleshooting
+
+**"Electron failed to install correctly, please delete node_modules/electron
+and try installing again"** — Electron's postinstall step (which downloads the
+actual Electron binary) didn't run or didn't finish.
+
+- **pnpm** blocks dependency install scripts by default. Add this to your
+  `package.json` and reinstall, or run `pnpm approve-builds` and select
+  `electron`:
+  ```jsonc
+  "pnpm": { "onlyBuiltDependencies": ["electron", "esbuild"] }
+  ```
+- **npm** runs install scripts by default, so this usually means a stale or
+  interrupted install — often from switching package managers (e.g. running
+  `npm install` over a `node_modules` that pnpm created) or a network blip
+  mid-download. Fix: delete `node_modules` (and the lockfile if you switched
+  package managers) and reinstall from scratch.
 
 ## How it works
 

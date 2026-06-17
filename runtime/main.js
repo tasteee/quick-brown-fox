@@ -10,7 +10,7 @@
 //          loaded from ./renderer/index.html and, if a bundled server exists,
 //          this process starts it.
 
-const { app, BrowserWindow, shell } = require('electron')
+const { app, BrowserWindow, Menu, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -32,7 +32,19 @@ function loadConfig() {
     serverPort: fileCfg.serverPort || null,
     openDevtools: process.env.QBF_OPEN_DEVTOOLS === 'true',
     window: Object.assign(
-      { width: 1024, height: 768, title: 'App' },
+      {
+        width: 1024,
+        height: 768,
+        title: 'App',
+        menuBar: false,
+        frame: true,
+        resizable: true,
+        maximizable: true,
+        minimizable: true,
+        fullscreenable: true,
+        fullscreen: false,
+        alwaysOnTop: false,
+      },
       fileCfg.window,
       envWindow
     ),
@@ -66,11 +78,33 @@ async function ensureServer(cfg) {
 }
 
 function createWindow(cfg, serverUrl) {
+  const w = cfg.window
+
+  // The File/Edit/View menu bar is a global (per-process), not per-window, so
+  // it's set once here rather than per BrowserWindow.
+  if (!w.menuBar) Menu.setApplicationMenu(null)
+
+  // Electron's native constructor isn't always happy with explicit
+  // `undefined` for numeric bounds, so only include min/max dimensions when set.
+  const bounds = {}
+  if (w.minWidth != null) bounds.minWidth = w.minWidth
+  if (w.minHeight != null) bounds.minHeight = w.minHeight
+  if (w.maxWidth != null) bounds.maxWidth = w.maxWidth
+  if (w.maxHeight != null) bounds.maxHeight = w.maxHeight
+
   const win = new BrowserWindow({
-    width: cfg.window.width,
-    height: cfg.window.height,
-    title: cfg.window.title,
-    backgroundColor: cfg.window.backgroundColor || '#ffffff',
+    width: w.width,
+    height: w.height,
+    ...bounds,
+    title: w.title,
+    backgroundColor: w.backgroundColor || '#ffffff',
+    frame: w.frame,
+    resizable: w.resizable,
+    maximizable: w.maximizable,
+    minimizable: w.minimizable,
+    fullscreenable: w.fullscreenable,
+    fullscreen: w.fullscreen,
+    alwaysOnTop: w.alwaysOnTop,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

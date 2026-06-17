@@ -97,6 +97,30 @@ test('explicit folder entry resolves inside it', () => {
   assert.strictEqual(cfg.entry, path.join(dir, 'source', 'main.tsx'))
 })
 
+test('window has sane chrome defaults: no menu bar, framed, resizable', () => {
+  const cfg = resolveConfig(makeProject(), {})
+  assert.strictEqual(cfg.window.menuBar, false)
+  assert.strictEqual(cfg.window.frame, true)
+  assert.strictEqual(cfg.window.resizable, true)
+  assert.strictEqual(cfg.window.fullscreen, false)
+  assert.strictEqual(cfg.window.alwaysOnTop, false)
+})
+
+test('package.json qbf.window overrides chrome defaults', () => {
+  const dir = makeProject()
+  const pkgPath = path.join(dir, 'package.json')
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+  pkg.qbf = { window: { menuBar: true, resizable: false, minWidth: 400 } }
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg))
+
+  const cfg = resolveConfig(dir, {})
+  assert.strictEqual(cfg.window.menuBar, true)
+  assert.strictEqual(cfg.window.resizable, false)
+  assert.strictEqual(cfg.window.minWidth, 400)
+  // untouched keys keep their defaults
+  assert.strictEqual(cfg.window.frame, true)
+})
+
 test('cli overrides win over defaults', () => {
   const dir = makeProject()
   const cfg = resolveConfig(dir, { title: 'Custom', width: 800 })
