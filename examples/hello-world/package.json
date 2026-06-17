@@ -1,0 +1,20 @@
+{
+  "name": "hello-world",
+  "version": "1.0.0",
+  "productName": "Hello World",
+  "private": true,
+  "scripts": {
+    "dev": "qbf dev src/main.tsx",
+    "build": "qbf build src/main.tsx"
+  },
+  "devDependencies": {
+    "quick-brown-fox": "file:../.."
+  },
+  "qbf": {
+    "window": {
+      "width": 900,
+      "height": 640,
+      "title": "Hello World"
+    }
+  }
+}

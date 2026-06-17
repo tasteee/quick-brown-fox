@@ -1,0 +1,6 @@
+node_modules/
+dist-qbf/
+*.log
+.DS_Store
+.vite-qbf/
+.qbf/
