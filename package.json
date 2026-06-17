@@ -1,7 +1,7 @@
 {
   "name": "quick-brown-fox",
-  "version": "0.1.0",
-  "description": "Zero-config bundler for desktop apps. Write a normal React + TypeScript app, run it as an Electron desktop app — no Electron wiring required.",
+  "version": "0.2.0",
+  "description": "Zero-config bundler for desktop apps. Write a normal React + TypeScript UI plus an optional Node server, run it as an Electron desktop app — no Electron wiring required.",
   "keywords": [
     "electron",
     "vite",
@@ -16,6 +16,17 @@
   "bin": {
     "qbf": "bin/qbf.js",
     "quick-brown-fox": "bin/qbf.js"
+  },
+  "exports": {
+    "./client": {
+      "types": "./runtime/client.d.ts",
+      "default": "./runtime/client.mjs"
+    },
+    "./server": {
+      "types": "./runtime/server.d.ts",
+      "default": "./runtime/server.mjs"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "bin",

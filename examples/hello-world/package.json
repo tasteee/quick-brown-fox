@@ -4,8 +4,8 @@
   "productName": "Hello World",
   "private": true,
   "scripts": {
-    "dev": "qbf dev src/main.tsx",
-    "build": "qbf build src/main.tsx"
+    "dev": "qbf dev",
+    "build": "qbf build"
   },
   "devDependencies": {
     "quick-brown-fox": "file:../.."

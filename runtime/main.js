@@ -4,24 +4,23 @@
 // packaged production app. The user never writes or imports this — QBF owns
 // all of the Electron wiring.
 //
-// Behaviour is driven entirely by configuration so the same file works in
-// dev (load a Vite dev-server URL) and in production (load a built
-// index.html from disk):
-//
-//   dev  : QBF passes QBF_DEV_URL + QBF_WINDOW via the environment.
-//   prod : a sibling qbf.config.json holds the window options; the renderer
-//          is loaded from ./renderer/index.html.
+//   dev  : QBF passes QBF_DEV_URL (+ QBF_SERVER_URL if a backend is running)
+//          via the environment. The dev orchestrator owns the server process.
+//   prod : a sibling qbf.config.json holds the window options; the renderer is
+//          loaded from ./renderer/index.html and, if a bundled server exists,
+//          this process starts it.
 
 const { app, BrowserWindow, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
+const { startServerProcess } = require('./server-runner')
+const { getFreePort } = require('./net-utils')
+
 function loadConfig() {
-  // Production: bundled config file written at build time.
-  const cfgFile = path.join(__dirname, 'qbf.config.json')
   let fileCfg = {}
   try {
-    fileCfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'))
+    fileCfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'qbf.config.json'), 'utf8'))
   } catch {
     /* dev mode, or no file — fall back to env */
   }
@@ -29,8 +28,14 @@ function loadConfig() {
   const envWindow = safeJSON(process.env.QBF_WINDOW) || {}
   return {
     devUrl: process.env.QBF_DEV_URL || null,
+    serverUrl: process.env.QBF_SERVER_URL || null,
+    serverPort: fileCfg.serverPort || null,
     openDevtools: process.env.QBF_OPEN_DEVTOOLS === 'true',
-    window: Object.assign({ width: 1024, height: 768, title: 'App' }, fileCfg.window, envWindow),
+    window: Object.assign(
+      { width: 1024, height: 768, title: 'App' },
+      fileCfg.window,
+      envWindow
+    ),
   }
 }
 
@@ -43,7 +48,24 @@ function safeJSON(s) {
   }
 }
 
-function createWindow(cfg) {
+let serverChild = null
+
+// In production this process owns the backend. In dev the orchestrator already
+// started it and passes the URL via QBF_SERVER_URL.
+async function ensureServer(cfg) {
+  if (cfg.serverUrl) return cfg.serverUrl
+
+  const bundlePath = path.join(__dirname, 'server.bundle.cjs')
+  if (!fs.existsSync(bundlePath)) return null
+
+  const port = await getFreePort(cfg.serverPort)
+  const { child, ready } = startServerProcess({ bundlePath, port, hostDir: __dirname })
+  serverChild = child
+  await ready
+  return `http://127.0.0.1:${port}`
+}
+
+function createWindow(cfg, serverUrl) {
   const win = new BrowserWindow({
     width: cfg.window.width,
     height: cfg.window.height,
@@ -55,13 +77,13 @@ function createWindow(cfg) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      additionalArguments: serverUrl ? [`--qbf-server-url=${serverUrl}`] : [],
     },
   })
 
   win.once('ready-to-show', () => win.show())
 
-  // Open target=_blank / external links in the user's browser, not a new
-  // Electron window.
+  // Open external links in the user's browser, not a new Electron window.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url)
     return { action: 'deny' }
@@ -81,8 +103,7 @@ function start() {
   const cfg = loadConfig()
 
   // Single-instance lock so re-launching focuses the existing window.
-  const gotLock = app.requestSingleInstanceLock()
-  if (!gotLock) {
+  if (!app.requestSingleInstanceLock()) {
     app.quit()
     return
   }
@@ -96,18 +117,36 @@ function start() {
     }
   })
 
-  app.whenReady().then(() => {
-    mainWindow = createWindow(cfg)
+  app.whenReady().then(async () => {
+    let serverUrl = null
+    try {
+      serverUrl = await ensureServer(cfg)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[qbf] failed to start server:', err)
+    }
+
+    mainWindow = createWindow(cfg, serverUrl)
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = createWindow(cfg)
+        mainWindow = createWindow(cfg, serverUrl)
       }
     })
   })
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()
+  })
+
+  app.on('before-quit', () => {
+    if (serverChild && serverChild.exitCode === null) {
+      try {
+        serverChild.kill()
+      } catch {
+        /* ignore */
+      }
+    }
   })
 }
 
