@@ -59,6 +59,15 @@ React, React DOM, Vite and Electron all come bundled with quick-brown-fox, so
 you don't have to install or configure them yourself. (Prefer to pin your own
 React? Add it to your `dependencies` and it will be used instead.)
 
+> **Using pnpm?** pnpm blocks dependency build scripts by default, which stops
+> Electron from downloading its binary (you'll see _"Electron failed to install
+> correctly"_). Allow it by adding the following to your `package.json` and
+> reinstalling, or run `pnpm approve-builds` and select `electron`:
+>
+> ```jsonc
+> "pnpm": { "onlyBuiltDependencies": ["electron", "esbuild"] }
+> ```
+
 ## Project layout
 
 ```
