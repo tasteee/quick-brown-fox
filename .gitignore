@@ -4,3 +4,4 @@ dist-qbf/
 .DS_Store
 .vite-qbf/
 .qbf/
+.vscode

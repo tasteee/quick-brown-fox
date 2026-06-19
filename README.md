@@ -288,6 +288,20 @@ actual Electron binary) didn't run or didn't finish.
   mid-download. Fix: delete `node_modules` (and the lockfile if you switched
   package managers) and reinstall from scratch.
 
+**`qbf build` fails with "Cannot create symbolic link : A required privilege is
+not held by the client"** — this comes from electron-builder downloading its
+`winCodeSign` package, whose archive contains macOS symlinks that Windows won't
+extract without the symlink privilege.
+
+quick-brown-fox avoids this for normal unsigned builds by skipping the
+code-signing step (`win.signAndEditExecutable: false`), so you shouldn't hit it.
+If you opt back into code signing (by adding your own `build.win` config), you'll
+need that step — enable **Windows Developer Mode** (Settings → Privacy &
+security → For developers → Developer Mode) or run the build from an
+Administrator terminal, and clear the stale cache at
+`%LOCALAPPDATA%\electron-builder\Cache\winCodeSign` if a previous attempt left it
+half-extracted.
+
 ## How it works
 
 quick-brown-fox is a thin orchestration layer over **Vite** (bundling + HMR) and
