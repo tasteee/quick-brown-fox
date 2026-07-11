@@ -32,6 +32,8 @@ test('parses flags and aliases', () => {
     'build',
     '-e',
     'source/index.tsx',
+    '--framework',
+    'solid',
     '--port',
     '4000',
     '--no-devtools',
@@ -40,6 +42,7 @@ test('parses flags and aliases', () => {
   ])
   assert.strictEqual(command, 'build')
   assert.strictEqual(options.entry, 'source/index.tsx')
+  assert.strictEqual(options.framework, 'solid')
   assert.strictEqual(options.port, 4000)
   assert.strictEqual(options.devtools, false)
   assert.strictEqual(options.title, 'My App')
@@ -56,17 +59,17 @@ test('unknown option throws', () => {
 
 // ---- config + html generation ---------------------------------------------
 
-function makeProject({ withServer } = {}) {
+function makeProject({ withServer, serverEntry = 'main.ts', pkg = {} } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qbf-test-'))
   fs.writeFileSync(
     path.join(dir, 'package.json'),
-    JSON.stringify({ name: 'demo', version: '1.2.3' })
+    JSON.stringify(Object.assign({ name: 'demo', version: '1.2.3' }, pkg))
   )
   fs.mkdirSync(path.join(dir, 'source'))
   fs.writeFileSync(path.join(dir, 'source', 'main.tsx'), '// entry\n')
   if (withServer) {
     fs.mkdirSync(path.join(dir, 'server'))
-    fs.writeFileSync(path.join(dir, 'server', 'main.ts'), 'export default () => {}\n')
+    fs.writeFileSync(path.join(dir, 'server', serverEntry), 'export default () => {}\n')
   }
   return dir
 }
@@ -75,8 +78,69 @@ test('autodetects source/main.tsx', () => {
   const dir = makeProject()
   const cfg = resolveConfig(dir, {})
   assert.strictEqual(cfg.entry, path.join(dir, 'source', 'main.tsx'))
+  assert.strictEqual(cfg.framework.name, 'react')
+  assert.deepStrictEqual(cfg.filesystem, { enabled: false })
   assert.strictEqual(cfg.appName, 'demo')
   assert.strictEqual(cfg.window.width, 1024)
+})
+
+test('filesystem access is enabled only when declared', () => {
+  const dir = makeProject({ pkg: { qbf: { filesystem: true } } })
+  const cfg = resolveConfig(dir, {})
+  assert.deepStrictEqual(cfg.filesystem, { enabled: true })
+})
+
+test('filesystem access can use permissions alias', () => {
+  const dir = makeProject({ pkg: { qbf: { permissions: { filesystem: true } } } })
+  const cfg = resolveConfig(dir, {})
+  assert.deepStrictEqual(cfg.filesystem, { enabled: true })
+})
+
+test('filesystem access can preserve object config', () => {
+  const dir = makeProject({ pkg: { qbf: { filesystem: { bookmarks: true } } } })
+  const cfg = resolveConfig(dir, {})
+  assert.deepStrictEqual(cfg.filesystem, { enabled: true, bookmarks: true })
+})
+
+test('detects solid framework from dependencies', () => {
+  const dir = makeProject({ pkg: { dependencies: { 'solid-js': '^1.9.0' } } })
+  const cfg = resolveConfig(dir, {})
+  assert.strictEqual(cfg.framework.name, 'solid')
+})
+
+test('detects vue framework from dependencies', () => {
+  const dir = makeProject({ pkg: { dependencies: { vue: '^3.5.0' } } })
+  const cfg = resolveConfig(dir, {})
+  assert.strictEqual(cfg.framework.name, 'vue')
+})
+
+test('detects svelte framework from dependencies', () => {
+  const dir = makeProject({ pkg: { devDependencies: { svelte: '^5.0.0' } } })
+  const cfg = resolveConfig(dir, {})
+  assert.strictEqual(cfg.framework.name, 'svelte')
+})
+
+test('explicit framework config wins over dependency detection', () => {
+  const dir = makeProject({
+    pkg: {
+      dependencies: { react: '^18.0.0' },
+      qbf: { framework: { name: 'solid', options: { hot: false } } },
+    },
+  })
+  const cfg = resolveConfig(dir, {})
+  assert.strictEqual(cfg.framework.name, 'solid')
+  assert.deepStrictEqual(cfg.framework.options, { hot: false })
+})
+
+test('cli framework overrides package config', () => {
+  const dir = makeProject({ pkg: { qbf: { framework: 'react' } } })
+  const cfg = resolveConfig(dir, { framework: 'vanilla' })
+  assert.strictEqual(cfg.framework.name, 'vanilla')
+})
+
+test('unknown framework throws a helpful error', () => {
+  const dir = makeProject()
+  assert.throws(() => resolveConfig(dir, { framework: 'mystery' }), /Unknown framework/)
 })
 
 test('server is null when there is no server/ folder', () => {
@@ -89,6 +153,15 @@ test('detects server/main.ts when present', () => {
   const cfg = resolveConfig(dir, {})
   assert.ok(cfg.server)
   assert.strictEqual(cfg.server.entry, path.join(dir, 'server', 'main.ts'))
+})
+
+test('detects common server module formats', () => {
+  for (const entry of ['main.mts', 'main.cts', 'main.mjs', 'main.cjs']) {
+    const dir = makeProject({ withServer: true, serverEntry: entry })
+    const cfg = resolveConfig(dir, {})
+    assert.ok(cfg.server)
+    assert.strictEqual(cfg.server.entry, path.join(dir, 'server', entry))
+  }
 })
 
 test('explicit folder entry resolves inside it', () => {
@@ -137,13 +210,24 @@ test('missing entry throws a helpful error', () => {
 test('prepareAppDir writes html + shim pointing at the entry', () => {
   const dir = makeProject()
   const cfg = resolveConfig(dir, {})
-  const { htmlFile, entryShim } = prepareAppDir(cfg, 'development')
+  const { htmlFile, entryShim, renderShim } = prepareAppDir(cfg, 'development')
   const html = fs.readFileSync(htmlFile, 'utf8')
   const shim = fs.readFileSync(entryShim, 'utf8')
+  const render = fs.readFileSync(renderShim, 'utf8')
   assert.ok(html.includes('<div id="root">'))
   assert.ok(html.includes('./entry.ts'))
   assert.ok(!html.includes('Content-Security-Policy')) // dev: no CSP
   assert.ok(shim.includes('../../source/main.tsx'))
+  assert.ok(render.includes('react-dom/client'))
+  assert.ok(render.includes('export function render'))
+})
+
+test('prepareAppDir writes a framework-specific render shim', () => {
+  const dir = makeProject({ pkg: { qbf: { framework: 'solid' } } })
+  const cfg = resolveConfig(dir, {})
+  const { renderShim } = prepareAppDir(cfg, 'development')
+  const render = fs.readFileSync(renderShim, 'utf8')
+  assert.ok(render.includes('solid-js/web'))
 })
 
 test('production html includes a CSP', () => {
@@ -157,7 +241,8 @@ test('prepareServerShim re-exports the server entry', () => {
   const cfg = resolveConfig(dir, {})
   const { shim } = prepareServerShim(cfg)
   const code = fs.readFileSync(shim, 'utf8')
-  assert.ok(code.includes('export { default }'))
+  assert.ok(code.includes("mod.default || pick('handler') || pick('server') || mod"))
+  assert.ok(code.includes('export default handler'))
   assert.ok(code.includes('../../server/main.ts'))
 })
 

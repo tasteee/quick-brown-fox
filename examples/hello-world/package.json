@@ -10,9 +10,6 @@
   "devDependencies": {
     "quick-brown-fox": "file:../.."
   },
-  "pnpm": {
-    "onlyBuiltDependencies": ["electron", "esbuild"]
-  },
   "qbf": {
     "window": {
       "width": 900,

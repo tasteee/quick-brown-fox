@@ -1,6 +1,6 @@
 # 🦊 quick-brown-fox
 
-**Zero-config bundler for desktop apps.** Write a normal React + TypeScript UI
+**Zero-config bundler for desktop apps.** Write a normal web UI
 and an optional Node server, and run the whole thing as a real desktop app. No
 Electron wiring, no `BrowserWindow`, no `main` / `preload` boilerplate —
 quick-brown-fox owns all of that.
@@ -9,7 +9,7 @@ Think of it like Parcel, but the output is a desktop application instead of a
 website.
 
 ```
-source/   ──►  your React UI            (runs in the window)
+source/   ──►  your web UI              (runs in the window)
 server/   ──►  your Node backend        (runs alongside it, full Node access)
 
 qbf dev    ──►  the app in a desktop window, with hot reload
@@ -18,19 +18,19 @@ qbf build  ──►  a Windows installer (.exe)
 
 ## Why
 
-You want to ship a small desktop app. You like React and TypeScript. You do
-**not** want to learn Electron's process model, configure Vite, write a main
+You want to ship a small desktop app. You like React, Solid, Vue, Svelte, or
+plain TypeScript. You do **not** want to learn Electron's process model, configure Vite, write a main
 process, or wire up a preload script.
 
 With quick-brown-fox you write:
 
-- **`source/`** — an ordinary React app, the exact code you'd write for the
+- **`source/`** — an ordinary web app, the exact code you'd write for the
   browser. No Electron imports anywhere.
 - **`server/`** — an optional Node backend with full access to the filesystem,
   databases, native modules, and so on.
 
 The UI talks to the server over a local URL that quick-brown-fox wires up for
-you, so the renderer stays a sandboxed, plain React app while privileged work
+you, so the renderer stays sandboxed and plain while privileged work
 happens in the server.
 
 ```jsonc
@@ -55,17 +55,21 @@ All you need in your project is a `package.json`, a `tsconfig.json`, a
 npm install -D quick-brown-fox
 ```
 
-React, React DOM, Vite and Electron all come bundled with quick-brown-fox, so
-you don't have to install or configure them yourself. (Prefer to pin your own
-React? Add it to your `dependencies` and it will be used instead.)
+React, Solid, Vue, Svelte, Vite and Electron all come bundled with
+quick-brown-fox. If your app depends on one of those framework packages,
+quick-brown-fox auto-detects it. You can also set `qbf.framework` to `react`,
+`solid`, `vue`, `svelte`, or `vanilla`.
 
 > **Using pnpm?** pnpm blocks dependency build scripts by default, which stops
 > Electron from downloading its binary (you'll see _"Electron failed to install
 > correctly"_). Allow it by adding the following to your `package.json` and
 > reinstalling, or run `pnpm approve-builds` and select `electron`:
 >
-> ```jsonc
-> "pnpm": { "onlyBuiltDependencies": ["electron", "esbuild"] }
+> ```yaml
+> # pnpm-workspace.yaml
+> allowBuilds:
+>   electron: true
+>   esbuild: true
 > ```
 
 ## Project layout
@@ -75,20 +79,20 @@ my-app/
   package.json
   tsconfig.json
   source/
-    main.tsx        # UI entry — mounts React
+    main.tsx        # UI entry
     App.tsx
   server/           # optional
-    main.ts         # one handler function
+    main.ts         # one handler function (.ts, .js, .mjs, .cjs, .mts, .cts)
 ```
 
 ### The UI (`source/`)
 
 ```tsx
 // source/main.tsx
-import { createRoot } from 'react-dom/client'
+import { render } from 'quick-brown-fox/render'
 import { App } from './App'
 
-createRoot(document.getElementById('root')!).render(<App />)
+render(App)
 ```
 
 ```tsx
@@ -108,7 +112,38 @@ export function App() {
 ```
 
 There is no `index.html` to write and no Electron code anywhere — it's just a
-React app.
+web app; React is only the default.
+
+The helper mounts with the configured framework, defaults to React, and uses
+`#root` unless you pass `render(App, { target: '#app', props: { ... } })`.
+
+#### UI framework
+
+React is the default. Solid, Vue, Svelte, and vanilla Vite apps are supported
+too. quick-brown-fox auto-detects the framework from your package dependencies,
+or you can set it explicitly:
+
+```jsonc
+{
+  "qbf": {
+    "framework": "solid"
+  }
+}
+```
+
+Use `qbf dev --framework vue` or `qbf build --framework svelte` when you want a
+CLI override. Framework plugin options can be passed as JSON:
+
+```jsonc
+{
+  "qbf": {
+    "framework": {
+      "name": "solid",
+      "options": {}
+    }
+  }
+}
+```
 
 ### The server (`server/`)
 
@@ -139,6 +174,16 @@ export default defineServer(async (ctx) => {
 
 `defineServer` is optional sugar for type inference — `export default (ctx) => …`
 works exactly the same.
+
+You can also export a plain Node request listener from `.js`, `.mjs`, `.cjs`,
+`.ts`, `.mts`, or `.cts`:
+
+```js
+// server/main.cjs
+module.exports = (req, res) => {
+  res.end('ok')
+}
+```
 
 #### The `context` object
 
@@ -178,6 +223,34 @@ await api.post('/echo', { a: 1 })   // → parsed JSON
 quick-brown-fox injects the server URL at runtime, so you never hard-code a
 port. (It's also on `window.qbf.serverUrl` if you'd rather not import anything.)
 
+### Filesystem access
+
+Filesystem access is opt-in. Declare it in `package.json`:
+
+```jsonc
+{
+  "qbf": {
+    "filesystem": true
+  }
+}
+```
+
+Then ask the user to choose files or folders from the UI:
+
+```ts
+import { filesystem } from 'quick-brown-fox/client'
+
+const folder = await filesystem.openFolder({ title: 'Choose a project folder' })
+const file = await filesystem.openFile({
+  title: 'Choose a document',
+  filters: [{ name: 'Documents', extensions: ['txt', 'md', 'json'] }],
+})
+```
+
+The helpers return absolute paths, or `null` / `[]` when the user cancels.
+Send selected paths to your `server/` handler when your app needs to watch,
+read, write, or otherwise operate on them.
+
 ## Run it
 
 ```sh
@@ -207,12 +280,16 @@ auto-detected from `server/` (`server/main.ts`, …).
 | Option              | Default    | Description                          |
 | ------------------- | ---------- | ------------------------------------ |
 | `-e, --entry <p>`   | autodetect | UI entry file or folder              |
+| `--framework <name>`| autodetect | `react`, `solid`, `vue`, `svelte`, or `vanilla` |
 | `-o, --out <dir>`   | `dist-qbf` | Build output directory               |
 | `-p, --port <n>`    | `5193`     | Dev server port                      |
 | `--title <s>`       | app name   | Window title / product name          |
 | `--width <n>`       | `1024`     | Window width                         |
 | `--height <n>`      | `768`      | Window height                        |
 | `--no-devtools`     | —          | Don't auto-open devtools in dev      |
+
+Server entries can be TypeScript or JavaScript, ESM or CommonJS: `.ts`, `.js`,
+`.mjs`, `.cjs`, `.mts`, and `.cts` are all supported.
 
 ### Configuration (optional)
 
@@ -223,6 +300,8 @@ field in `package.json`:
 {
   "qbf": {
     "entry": "source/main.tsx",
+    "framework": "solid",
+    "filesystem": true,
     "outDir": "dist-qbf",
     "server": { "entry": "server/main.ts", "port": 5197 },
     "window": {
@@ -279,8 +358,11 @@ actual Electron binary) didn't run or didn't finish.
 - **pnpm** blocks dependency install scripts by default. Add this to your
   `package.json` and reinstall, or run `pnpm approve-builds` and select
   `electron`:
-  ```jsonc
-  "pnpm": { "onlyBuiltDependencies": ["electron", "esbuild"] }
+  ```yaml
+  # pnpm-workspace.yaml
+  allowBuilds:
+    electron: true
+    esbuild: true
   ```
 - **npm** runs install scripts by default, so this usually means a stale or
   interrupted install — often from switching package managers (e.g. running
@@ -323,7 +405,7 @@ exposed to the UI is `window.qbf = { isDesktop, platform, serverUrl }`.
 
 ## Requirements
 
-- Node.js >= 18
+- Node.js >= 20.19.0
 - A `package.json`, a `tsconfig.json`, and a `source/` folder
 
 ## License

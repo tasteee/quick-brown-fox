@@ -62,6 +62,10 @@ export interface Context {
  * to send a response yourself. May be async.
  */
 export type Handler = (ctx: Context) => unknown | Promise<unknown>
+export type NodeHandler = (
+  req: IncomingMessage,
+  res: ServerResponse
+) => unknown | Promise<unknown>
 
-export declare function defineServer(handler: Handler): Handler
+export declare function defineServer<T extends Handler | NodeHandler>(handler: T): T
 export default defineServer

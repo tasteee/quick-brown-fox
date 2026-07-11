@@ -18,12 +18,40 @@ export interface Api {
 export declare const api: Api
 export default api
 
+export interface FileDialogFilter {
+  name: string
+  extensions: string[]
+}
+
+export interface FileDialogOptions {
+  title?: string
+  defaultPath?: string
+  buttonLabel?: string
+  message?: string
+  filters?: FileDialogFilter[]
+}
+
+export interface Filesystem {
+  readonly enabled: boolean
+  /** Ask the user to select one file. Returns null when canceled. */
+  openFile(options?: FileDialogOptions): Promise<string | null>
+  /** Ask the user to select one or more files. Returns [] when canceled. */
+  openFiles(options?: FileDialogOptions): Promise<string[]>
+  /** Ask the user to select one folder. Returns null when canceled. */
+  openFolder(options?: FileDialogOptions): Promise<string | null>
+  /** Ask the user to select one or more folders. Returns [] when canceled. */
+  openFolders(options?: FileDialogOptions): Promise<string[]>
+}
+
+export declare const filesystem: Filesystem
+
 declare global {
   interface Window {
     qbf: {
       isDesktop: boolean
       platform: NodeJS.Platform | string
       serverUrl: string
+      filesystem?: Filesystem
     }
   }
 }

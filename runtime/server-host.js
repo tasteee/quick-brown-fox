@@ -14,6 +14,12 @@
 //     ctx.response.notFound()
 //   }
 //
+// A plain Node request listener also works:
+//
+//   export default function (req, res) {
+//     res.end('ok')
+//   }
+//
 // ctx.request  : { method, path, url, query, params, headers, body }
 //                (body is parsed automatically for JSON / form payloads)
 // ctx.response : { json, text, html, status, header, send, redirect, notFound, raw }
@@ -36,8 +42,10 @@ function loadHandler() {
   const handler = mod && (mod.default || mod)
   if (typeof handler !== 'function') {
     fail(
-      'your server entry must `export default` a handler function, e.g.\n' +
-        '  export default (ctx) => { ctx.response.json({ ok: true }) }'
+      'your server entry must export a handler function, e.g.\n' +
+        '  export default (ctx) => { ctx.response.json({ ok: true }) }\n' +
+        'or a Node request listener:\n' +
+        '  module.exports = (req, res) => res.end("ok")'
     )
   }
   return handler
@@ -142,7 +150,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const ctx = { request, response, req, res }
-    const result = await handler(ctx)
+    const result = handler.length >= 2 ? await handler(req, res) : await handler(ctx)
 
     // A returned value (when nothing was sent yet) becomes the JSON response.
     if (!response.sent) {

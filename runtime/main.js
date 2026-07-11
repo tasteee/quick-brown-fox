@@ -10,7 +10,7 @@
 //          loaded from ./renderer/index.html and, if a bundled server exists,
 //          this process starts it.
 
-const { app, BrowserWindow, Menu, shell } = require('electron')
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -30,6 +30,7 @@ function loadConfig() {
     devUrl: process.env.QBF_DEV_URL || null,
     serverUrl: process.env.QBF_SERVER_URL || null,
     serverPort: fileCfg.serverPort || null,
+    filesystem: normalizeFilesystem(fileCfg.filesystem || safeJSON(process.env.QBF_FILESYSTEM)),
     openDevtools: process.env.QBF_OPEN_DEVTOOLS === 'true',
     window: Object.assign(
       {
@@ -49,6 +50,13 @@ function loadConfig() {
       envWindow
     ),
   }
+}
+
+function normalizeFilesystem(filesystem) {
+  if (!filesystem) return { enabled: false }
+  if (filesystem === true) return { enabled: true }
+  if (typeof filesystem === 'object') return Object.assign({ enabled: !!filesystem.enabled }, filesystem)
+  return { enabled: false }
 }
 
 function safeJSON(s) {
@@ -111,7 +119,10 @@ function createWindow(cfg, serverUrl) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      additionalArguments: serverUrl ? [`--qbf-server-url=${serverUrl}`] : [],
+      additionalArguments: [
+        ...(serverUrl ? [`--qbf-server-url=${serverUrl}`] : []),
+        `--qbf-filesystem-enabled=${cfg.filesystem && cfg.filesystem.enabled ? 'true' : 'false'}`,
+      ],
     },
   })
 
@@ -133,8 +144,52 @@ function createWindow(cfg, serverUrl) {
   return win
 }
 
+function setupFilesystemIpc(cfg) {
+  const enabled = !!(cfg.filesystem && cfg.filesystem.enabled)
+  ipcMain.handle('qbf:filesystem:open', async (event, request) => {
+    if (!enabled) {
+      throw new Error('Filesystem access is not enabled. Add `"filesystem": true` to your package.json qbf config.')
+    }
+
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const mode = request && request.mode
+    const dialogOptions = sanitizeDialogOptions(request && request.options)
+    const properties = mode === 'folder' ? ['openDirectory'] : ['openFile']
+    if (mode === 'files') properties.push('multiSelections')
+    if (mode === 'folders') {
+      properties.length = 0
+      properties.push('openDirectory', 'multiSelections')
+    }
+
+    const result = await dialog.showOpenDialog(win || undefined, {
+      ...dialogOptions,
+      properties,
+    })
+    if (result.canceled) return mode === 'files' || mode === 'folders' ? [] : null
+    return mode === 'files' || mode === 'folders' ? result.filePaths : result.filePaths[0] || null
+  })
+}
+
+function sanitizeDialogOptions(options) {
+  options = options && typeof options === 'object' ? options : {}
+  const out = {}
+  for (const key of ['title', 'defaultPath', 'buttonLabel', 'message']) {
+    if (options[key] != null) out[key] = options[key]
+  }
+  if (Array.isArray(options.filters)) {
+    out.filters = options.filters
+      .filter((f) => f && typeof f.name === 'string' && Array.isArray(f.extensions))
+      .map((f) => ({
+        name: f.name,
+        extensions: f.extensions.map(String),
+      }))
+  }
+  return out
+}
+
 function start() {
   const cfg = loadConfig()
+  setupFilesystemIpc(cfg)
 
   // Single-instance lock so re-launching focuses the existing window.
   if (!app.requestSingleInstanceLock()) {

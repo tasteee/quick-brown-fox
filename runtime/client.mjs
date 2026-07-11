@@ -22,6 +22,16 @@ export const serverUrl = base()
 export const isDesktop =
   typeof window !== 'undefined' && !!(window.qbf && window.qbf.isDesktop)
 
+function getFilesystem() {
+  const fs = typeof window !== 'undefined' && window.qbf && window.qbf.filesystem
+  if (!fs || !fs.enabled) {
+    throw new Error(
+      'Filesystem access is not enabled. Add `"filesystem": true` to your package.json qbf config.'
+    )
+  }
+  return fs
+}
+
 function toUrl(path) {
   if (/^https?:\/\//i.test(path)) return path
   const b = base()
@@ -48,6 +58,30 @@ api.post = async function post(path, body, init) {
     ...init,
   })
   return res.json()
+}
+
+/** Native file/folder picker helpers, available when qbf.filesystem is enabled. */
+export const filesystem = {
+  get enabled() {
+    return !!(
+      typeof window !== 'undefined' &&
+      window.qbf &&
+      window.qbf.filesystem &&
+      window.qbf.filesystem.enabled
+    )
+  },
+  openFile(options) {
+    return getFilesystem().openFile(options)
+  },
+  openFiles(options) {
+    return getFilesystem().openFiles(options)
+  },
+  openFolder(options) {
+    return getFilesystem().openFolder(options)
+  },
+  openFolders(options) {
+    return getFilesystem().openFolders(options)
+  },
 }
 
 export default api

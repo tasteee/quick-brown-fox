@@ -1,11 +1,14 @@
 {
   "name": "quick-brown-fox",
   "version": "0.2.0",
-  "description": "Zero-config bundler for desktop apps. Write a normal React + TypeScript UI plus an optional Node server, run it as an Electron desktop app — no Electron wiring required.",
+  "description": "Zero-config bundler for desktop apps. Write a normal web UI plus an optional Node server, run it as an Electron desktop app - no Electron wiring required.",
   "keywords": [
     "electron",
     "vite",
     "react",
+    "solid",
+    "vue",
+    "svelte",
     "typescript",
     "desktop",
     "bundler",
@@ -26,6 +29,10 @@
       "types": "./runtime/server.d.ts",
       "default": "./runtime/server.mjs"
     },
+    "./render": {
+      "types": "./runtime/render.d.ts",
+      "default": "./runtime/render.mjs"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -35,25 +42,27 @@
     "README.md"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20.19.0"
   },
   "scripts": {
     "test": "node test/cli.test.js"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "@vitejs/plugin-vue": "^6.0.7",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "vite": "^5.4.11",
-    "vite-tsconfig-paths": "^5.1.4"
+    "solid-js": "^1.9.14",
+    "svelte": "^5.56.4",
+    "vite": "^8.1.4",
+    "vite-plugin-solid": "^2.11.12",
+    "vue": "^3.5.39"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["electron", "esbuild"]
   }
 }
