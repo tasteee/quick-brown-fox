@@ -41,7 +41,7 @@ happens in the server.
     "build": "qbf build"
   },
   "devDependencies": {
-    "quick-brown-fox": "^0.2.0"
+    "quick-brown-fox": "^0.3.1"
   }
 }
 ```
